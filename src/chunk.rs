@@ -18,7 +18,7 @@ pub enum Block {
 }
 
 impl Block {
-    fn transparent(&self) -> bool {
+    pub fn transparent(&self) -> bool {
         use Block::*;
         match self {
             Air => true,
@@ -27,7 +27,7 @@ impl Block {
     }
 
     /// Returns wether the given block is a full block
-    fn full(&self) -> bool {
+    pub fn full(&self) -> bool {
         use Block::*;
         match self {
             Air => false,

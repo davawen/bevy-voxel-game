@@ -36,6 +36,21 @@ impl ChunkManager {
         }
     }
 
+    /// @returns A tuple of the key of the key of the chunk and the position inside the chunk
+    pub fn get_keys(global_pos: IVec3) -> (IVec3, IVec3) {
+        let key = IVec3::new(
+            global_pos.x.div_euclid(CHUNK_SIZE as i32),
+            global_pos.y.div_euclid(CHUNK_SIZE as i32),
+            global_pos.z.div_euclid(CHUNK_SIZE as i32),
+        );
+        let pos = IVec3::new(
+            global_pos.x.rem_euclid(CHUNK_SIZE as i32),
+            global_pos.y.rem_euclid(CHUNK_SIZE as i32),
+            global_pos.z.rem_euclid(CHUNK_SIZE as i32),
+        );
+        (key, pos)
+    }
+
     pub fn is_loaded(&self, key: IVec3) -> bool {
         self.chunks.contains_key(&key)
     }
