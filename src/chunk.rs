@@ -31,6 +31,9 @@ pub fn generate_terrain(
     noise: Res<Noise>,
 ) {
     // let start = Instant::now();
+
+    // return;
+
     let commands = Arc::new(Mutex::new(commands));
     let manager = Arc::new(Mutex::new(manager));
 

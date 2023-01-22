@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use bevy::{prelude::*, render::render_resource::PrimitiveTopology};
+use bevy::{prelude::*, render::render_resource::PrimitiveTopology, time::FixedTimestep};
 use bevy_inspector_egui::{RegisterInspectable, WorldInspectorPlugin};
 
 mod block;
@@ -9,7 +9,7 @@ mod manager;
 mod player;
 
 use chunk::{generate_mesh, generate_terrain, NeedsMesh};
-use manager::{load_chunks, unload_chunks, ChunkManager};
+use manager::{load_chunks, unload_chunks, ChunkManager, CleanupTimer};
 use noise::OpenSimplex;
 use player::{BoundingBox, Velocity, VelocityMask};
 
@@ -83,8 +83,13 @@ fn main() {
         .insert_resource(player::CameraDisabled(true))
         .insert_resource(ChunkManager::default())
         .insert_resource(AtlasImage { ..default() })
+        .insert_resource(CleanupTimer(Timer::from_seconds(0.5, TimerMode::Repeating)))
+
         .add_plugins(DefaultPlugins)
-        .add_plugin(WorldInspectorPlugin::default())
+        // .add_plugin(WorldInspectorPlugin::default())
+        .add_plugin(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default())
+        .add_plugin(bevy::diagnostic::LogDiagnosticsPlugin::default())
+
         .register_inspectable::<Velocity>()
         .register_inspectable::<VelocityMask>()
         .add_startup_system(startup)
@@ -96,7 +101,11 @@ fn main() {
         //Chunk systems
         .add_system(generate_terrain)
         .add_system(generate_mesh)
-        .add_system(load_chunks)
-        .add_system(unload_chunks)
+        .add_system_set(
+            SystemSet::new()
+                .with_run_criteria(FixedTimestep::steps_per_second(2.0))
+                .with_system(load_chunks)
+                .with_system(unload_chunks)
+        )
         .run()
 }

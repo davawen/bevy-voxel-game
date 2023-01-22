@@ -1,3 +1,5 @@
+use std::time::{Instant, Duration};
+
 use bevy::{prelude::*, utils::HashMap};
 use itertools::Itertools;
 
@@ -92,6 +94,7 @@ pub const WORLD_HEIGHT: i32 = 128 / CHUNK_SIZE as i32;
 pub struct ChunkData {
     pub data: [[[Block; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE],
     pub generated: bool,
+    pub cached_time: Option<Instant>
 }
 
 macro_rules! decompose_vec_into {
@@ -171,12 +174,16 @@ pub fn load_chunks(
             continue;
         }
 
-        if !manager.is_loaded(key) {
+        if let Some(chunk) = manager.chunks.get_mut(&key) {
+            chunk.cached_time = None;
+        }
+        else {
             manager.chunks.insert(
                 key,
                 ChunkData {
                     generated: false,
                     data: default(),
+                    cached_time: None
                 },
             );
         }
@@ -213,6 +220,9 @@ pub fn load_chunks(
     }
 }
 
+#[derive(Resource, Deref, DerefMut)]
+pub struct CleanupTimer(pub Timer);
+
 pub fn unload_chunks(
     mut commands: Commands,
     mut manager: ResMut<ChunkManager>,
@@ -241,11 +251,22 @@ pub fn unload_chunks(
                 ))
                 .any()
         {
-            // WARNING: REMEMBER TO ADD THIS BACK
-            // MEMORY LEAK
-            // manager.chunks.remove(&chunk.key);
+            manager.chunks.get_mut(&chunk.key).unwrap().cached_time = Some(Instant::now());
             commands.entity(entity).despawn();
             manager.meshes.remove(&chunk.key);
         }
+    }
+
+    let mut remove = Vec::new();
+    for (&key, chunk) in manager.chunks.iter() {
+        let Some(cached) = chunk.cached_time else { continue };
+
+        if cached.elapsed() > Duration::from_secs(20) {
+            remove.push(key);
+        }
+    }
+
+    for key in remove {
+        manager.chunks.remove(&key);
     }
 }
