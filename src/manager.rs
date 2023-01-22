@@ -1,7 +1,7 @@
 use bevy::{prelude::*, utils::HashMap};
 use itertools::Itertools;
 
-use crate::chunk::{Block, NeedsMesh, Chunk};
+use crate::{chunk::{Block, NeedsMesh, NeedsTerrain, Chunk}, AtlasImage};
 
 #[derive(Default, Resource)]
 pub struct ChunkManager {
@@ -88,6 +88,7 @@ pub const CHUNK_SIZE: usize = 16;
 /// Number of chunks constituting the world vertically
 pub const WORLD_HEIGHT: i32 = 128 / CHUNK_SIZE as i32;
 
+#[derive(Default)]
 pub struct ChunkData {
     pub data: [[[Block; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE],
     pub generated: bool,
@@ -151,13 +152,13 @@ impl ChunkData {
 }
 
 // Specified at half size
-const RENDER_DISTANCE: i32 = 16;
-const LOD_RANGE: i32 = 4;
+const RENDER_DISTANCE: i32 = 8;
+const LOD_RANGE: i32 = 3;
 pub fn load_chunks(
     mut commands: Commands,
     mut manager: ResMut<ChunkManager>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    atlas: Res<AtlasImage>,
     player: Query<&Transform, With<Camera>>,
 ) {
     let player = player.single();
@@ -191,20 +192,23 @@ pub fn load_chunks(
             *loaded_lod = lod;
         }
         else {
-            let entity = commands
+            let mut entity = commands
                 .spawn((
                     Chunk { key },
                     NeedsMesh(lod),
                     PbrBundle {
                         mesh: meshes.add(Mesh::new(bevy::render::render_resource::PrimitiveTopology::TriangleList)),
-                        material: materials.add(Color::WHITE.into()),
+                        material: atlas.material.clone(),
                         transform: Transform::from_translation(key.as_vec3() * CHUNK_SIZE as f32),
                         ..default()
                     },
                     Name::new(format!("{key}"))
-                ))
-                .id();
-            manager.meshes.insert(key, (entity, lod));
+                ));
+
+            if !manager.is_generated(key) {
+                entity.insert(NeedsTerrain);
+            }
+            manager.meshes.insert(key, (entity.id(), lod));
         }
     }
 }

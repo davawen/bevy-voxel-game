@@ -1,14 +1,18 @@
 use std::f32::consts::PI;
 
 use bevy::{prelude::*, input::mouse::MouseMotion, window::CursorGrabMode};
+use bevy_inspector_egui::Inspectable;
 
-use crate::{manager::ChunkManager, AAAAAA};
+use crate::manager::ChunkManager;
 
 #[derive(Resource)]
 pub struct CameraDisabled(pub bool);
 
-#[derive(Component)]
+#[derive(Inspectable, Component)]
 pub struct Velocity(pub Vec3);
+
+#[derive(Inspectable, Component)]
+pub struct VelocityMask(pub Vec3);
 
 #[derive(Component, Clone)]
 pub struct BoundingBox {
@@ -53,6 +57,23 @@ impl BoundingBox {
             c + e,
         ]
     }
+
+    pub fn get_mesh(&self) -> Mesh {
+        let mut m = Mesh::new(bevy::render::render_resource::PrimitiveTopology::LineList);
+        let vertices = self.points().to_vec();
+        let normals = vec![Vec3::Y; 8];
+        let indices = vec![
+            0, 1, 2, 3, 0, 2, 1, 3,
+            0, 4, 1, 5, 2, 6, 3, 7,
+            4, 5, 6, 7, 4, 6, 5, 7
+        ];
+
+        m.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
+        m.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+        m.set_indices(Some(bevy::render::mesh::Indices::U32(indices)));
+
+        m
+    }
 }
 
 pub fn rotate_camera(
@@ -93,11 +114,21 @@ pub fn rotate_camera(
 }
 
 pub fn move_camera(
-    mut query: Query<(&mut Transform, &mut BoundingBox, &mut Velocity), With<Camera>>,
+    mut query: Query<(&mut Transform, &mut BoundingBox, &mut Velocity, &VelocityMask), With<Camera>>,
     keyboard: Res<Input<KeyCode>>,
     time: Res<Time>
 ) {
-    let (mut camera, mut bounding, mut velocity) = query.single_mut();
+    let (mut camera, mut bounding, mut velocity, mask) = query.single_mut();
+
+    camera.translation += velocity.0 * mask.0 * time.delta_seconds();
+    bounding.center = camera.translation - Vec3::new(0.0, 0.6, 0.0);
+
+    velocity.0 *= 0.95;
+
+    let mut acceleration = Vec3::ZERO;
+
+    const SPEED: f32 = 0.5;
+    const GRAVITY: f32 = 0.5;
 
     let mut relative_offset = Vec3::ZERO;
 
@@ -114,42 +145,31 @@ pub fn move_camera(
         relative_offset += Vec3::X;
     }
 
-    camera.translation += velocity.0 * time.delta_seconds();
-    bounding.center = camera.translation - Vec3::new(3.0, 0.6, 0.0);
+    relative_offset = camera.rotation * relative_offset;
+    relative_offset.y = 0.0;
+    relative_offset = relative_offset.normalize_or_zero();
 
-    const SPEED: f32 = 1.0;
-    const GRAVITY: f32 = 1.0;
-
-    velocity.0 *= 0.9;
-
-    let mut acceleration = Vec3::ZERO;
-
-    acceleration += camera.rotation * relative_offset * SPEED;
+    acceleration += relative_offset * SPEED;
     acceleration += Vec3::NEG_Y * GRAVITY;
 
     velocity.0 += acceleration/* *time.delta_seconds() */;
 
     if keyboard.just_pressed(KeyCode::Space) {
-        velocity.0.y = 20.0;
+        velocity.0.y = 40.0;
     }
 }
 
-pub fn aaaaa(query: Query<(&Transform), With<Camera>>, mut boudning_mesh: Query<&mut Transform, (With<AAAAAA>, Without<Camera>)>) {
-    let player = query.single();
-    let mut b_mesh = boudning_mesh.single_mut();
-
-    b_mesh.translation = player.translation - Vec3::new(3.0, 0.6, 0.0);
-}
-
 pub fn collision(
-    mut query: Query<(&BoundingBox, &mut Velocity), With<Camera>>,
+    mut query: Query<(&BoundingBox, &mut Velocity, &mut VelocityMask), With<Camera>>,
     time: Res<Time>,
     manager: Res<ChunkManager>
 ) {
-    let (bounding, mut velocity) = query.single_mut();
+    let (bounding, mut velocity, mut mask) = query.single_mut();
+
+    mask.0 = Vec3::ONE;
 
     let mut check_axis = |dir: Vec3| {
-        let nullify = bounding.points().into_iter().any(|point| {
+        if !bounding.points().into_iter().any(|point| {
             let ( player_key, player_pos ) = ChunkManager::get_keys((point + velocity.0*dir*time.delta_seconds()).floor().as_ivec3());
             
             if let Some(c) = manager.chunks.get(&player_key) {
@@ -158,17 +178,27 @@ pub fn collision(
             else {
                 true
             }
-        });
+        }) { return };
 
-        if nullify {
-            let response = velocity.0 * -dir;
-            velocity.0 += response; // Nullify the axis given
-        }
+        // let target = player_pos - (velocity.0*dir).signum().as_ivec3();
+        let response = velocity.0*dir;
+        velocity.0 -= response; // Nullify the axis given
+
+        let inverse_dir = Vec3::ONE - dir;
+        mask.0 *= inverse_dir;
     };
 
+    // First check individual axises
     check_axis(Vec3::X);
-    check_axis(Vec3::Y);
     check_axis(Vec3::Z);
+    check_axis(Vec3::Y);
+
+    // Check if there is any collision created only by the combination of the movement
+    check_axis(Vec3::X + Vec3::Z);
+    check_axis(Vec3::X + Vec3::Y);
+    check_axis(Vec3::Y + Vec3::Z);
+    //
+    // check_axis(Vec3::ONE);
 }
 
 
