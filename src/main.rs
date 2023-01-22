@@ -3,6 +3,7 @@ use std::f32::consts::PI;
 use bevy::{prelude::*, render::render_resource::PrimitiveTopology};
 use bevy_inspector_egui::{RegisterInspectable, WorldInspectorPlugin};
 
+mod block;
 mod chunk;
 mod manager;
 mod player;

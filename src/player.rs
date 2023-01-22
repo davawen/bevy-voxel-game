@@ -178,7 +178,7 @@ pub fn collision(
             else {
                 true
             }
-        }) { return };
+        }){ return };
 
         // let target = player_pos - (velocity.0*dir).signum().as_ivec3();
         let response = velocity.0*dir;

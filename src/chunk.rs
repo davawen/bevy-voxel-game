@@ -1,63 +1,14 @@
-use std::{time::{Instant, Duration}, sync::{Arc, Mutex}};
+use std::sync::{Arc, Mutex};
 
 use bevy::{
     math::DVec3,
     prelude::*,
-    render::mesh::Indices, ecs::component
+    render::mesh::Indices
 };
 use itertools::Itertools;
 use noise::NoiseFn;
 
-use crate::{Noise, manager::{ChunkManager, CHUNK_SIZE, WORLD_HEIGHT, ChunkData}};
-
-#[derive(Default, Clone, Copy)]
-pub enum Block {
-    #[default]
-    Air,
-    Grass,
-    Dirt,
-    Stone,
-}
-
-impl Block {
-    pub fn transparent(&self) -> bool {
-        use Block::*;
-        match self {
-            Air => true,
-            _ => false
-        }
-    }
-
-    /// Returns wether the given block is a full block
-    pub fn full(&self) -> bool {
-        use Block::*;
-        match self {
-            Air => false,
-            _ => true
-        }
-    }
-
-    pub fn uvs(&self) -> Option<(Vec2, Vec2)> {
-        const TEXTURE_BLOCK_SIZE: f32 = 16.0;
-        const ATLAS_SIZE: f32 = 256.0;
-
-        use Block::*;
-        let atlas_coordinate = match self {
-            Grass => Some(IVec2::new(0, 0)),
-            Dirt => Some(IVec2::new(1, 0)),
-            Stone => Some(IVec2::new(2, 0)),
-            _ => None
-        };
-
-        atlas_coordinate
-            .and_then(|c| Some((
-                c.as_vec2()*TEXTURE_BLOCK_SIZE / ATLAS_SIZE,
-                ((c + 1).as_vec2()*TEXTURE_BLOCK_SIZE - 1.0) / ATLAS_SIZE
-            )))
-            //.and_then(|(p1, p2)| Some((p1.as_vec2() / 256.0, p2.as_vec2() / 256.0))) // divide by atlas size
-    }
-}
-
+use crate::{Noise, manager::{ChunkManager, CHUNK_SIZE, WORLD_HEIGHT, ChunkData}, block::{Block, Face}};
 
 #[derive(Component)]
 pub struct Chunk {
@@ -140,11 +91,11 @@ pub fn generate_mesh(
         let mut texture_coordinates = Vec::new();
         let mut indices = Vec::new();
 
-        let mut add_face = |local_pos: IVec3, dir: IVec3, points: [Vec3; 4], uvs: &[Vec2; 4]| {
+        let mut add_face = |block: Block, local_pos: IVec3, face: Face, points: [Vec3; 4]| {
             // Return early if the adjacent face is not visible
             let lod_num = 2u32.pow(lod);
             if manager
-                .get_with_adjacent(chunk.key, local_pos + dir*lod_num as i32)
+                .get_with_adjacent(chunk.key, local_pos + face.normal()*lod_num as i32)
                 .unwrap_or(Block::Air)
                 .full()
             {
@@ -157,9 +108,11 @@ pub fn generate_mesh(
             let pos = local_pos.as_vec3() + Vec3::splat(0.5) * lod_multiplier;
             for p in points {
                 vertices.push((pos + p*lod_multiplier).to_array());
-                normals.push(dir.as_vec3().to_array());
+                normals.push(face.normal_vec3().to_array());
             }
-            texture_coordinates.extend_from_slice(uvs);
+
+            let uvs = block.uvs(face).unwrap_or([Vec2::ONE; 4]);
+            texture_coordinates.extend_from_slice(&uvs);
             indices.extend_from_slice(&[idx + 2, idx + 1, idx, idx, idx + 3, idx + 2]);
         };
 
@@ -169,79 +122,77 @@ pub fn generate_mesh(
             }
 
             let local_pos = IVec3::new(x as i32, y as i32, z as i32);
-            let (uv0, uv1) = block.uvs().unwrap_or((Vec2::splat(240.0 / 256.0), Vec2::splat(1.0)));
-            let uvs = &[ uv0, Vec2::new(uv1.x, uv0.y), uv1, Vec2::new(uv0.x, uv1.y) ];
 
             add_face(
+                block,
                 local_pos,
-                IVec3::Y,
+                Face::TOP,
                 [
                     Vec3::new(0.5, 0.5, -0.5),
                     Vec3::new(0.5, 0.5, 0.5),
                     Vec3::new(-0.5, 0.5, 0.5),
                     Vec3::new(-0.5, 0.5, -0.5),
                 ],
-                uvs
             );
 
             add_face(
+                block,
                 local_pos,
-                IVec3::NEG_Y,
+                Face::BOTTOM,
                 [
                     Vec3::new(0.5, -0.5, 0.5),
                     Vec3::new(0.5, -0.5, -0.5),
                     Vec3::new(-0.5, -0.5, -0.5),
                     Vec3::new(-0.5, -0.5, 0.5),
                 ],
-                uvs
             );
 
             add_face(
+                block,
                 local_pos,
-                IVec3::X,
+                Face::EAST,
                 [
                     Vec3::new(0.5, 0.5, 0.5),
                     Vec3::new(0.5, 0.5, -0.5),
                     Vec3::new(0.5, -0.5, -0.5),
                     Vec3::new(0.5, -0.5, 0.5),
                 ],
-                uvs
             );
 
             add_face(
+                block,
                 local_pos,
-                IVec3::NEG_X,
+                Face::WEST,
                 [
                     Vec3::new(-0.5, -0.5, 0.5),
                     Vec3::new(-0.5, -0.5, -0.5),
                     Vec3::new(-0.5, 0.5, -0.5),
                     Vec3::new(-0.5, 0.5, 0.5),
                 ],
-                uvs
             );
 
             add_face(
+                block,
                 local_pos,
-                IVec3::Z,
+                Face::NORTH,
                 [
                     Vec3::new(-0.5, 0.5, 0.5),
                     Vec3::new(0.5, 0.5, 0.5),
                     Vec3::new(0.5, -0.5, 0.5),
                     Vec3::new(-0.5, -0.5, 0.5),
                 ],
-                uvs
             );
 
             add_face(
+                block,
                 local_pos,
-                IVec3::NEG_Z,
+                Face::SOUTH,
                 [
                     Vec3::new(-0.5, -0.5, -0.5),
                     Vec3::new(0.5, -0.5, -0.5),
                     Vec3::new(0.5, 0.5, -0.5),
                     Vec3::new(-0.5, 0.5, -0.5),
                 ],
-                uvs
             );
         }
 

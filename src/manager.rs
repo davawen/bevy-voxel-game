@@ -1,7 +1,7 @@
 use bevy::{prelude::*, utils::HashMap};
 use itertools::Itertools;
 
-use crate::{chunk::{Block, NeedsMesh, NeedsTerrain, Chunk}, AtlasImage};
+use crate::{chunk::{NeedsMesh, NeedsTerrain, Chunk}, AtlasImage, block::Block};
 
 #[derive(Default, Resource)]
 pub struct ChunkManager {
