@@ -8,7 +8,7 @@ mod chunk;
 mod manager;
 mod player;
 
-use chunk::{generate_mesh, generate_terrain, NeedsMesh};
+use chunk::{generate_mesh, generate_terrain, NeedsMesh, cull_meshes};
 use manager::{load_chunks, unload_chunks, ChunkManager, CleanupTimer};
 use noise::OpenSimplex;
 use player::{BoundingBox, Velocity, VelocityMask};
@@ -101,9 +101,10 @@ fn main() {
         //Chunk systems
         .add_system(generate_terrain)
         .add_system(generate_mesh)
+        .add_system(cull_meshes)
         .add_system_set(
             SystemSet::new()
-                .with_run_criteria(FixedTimestep::steps_per_second(2.0))
+                .with_run_criteria(FixedTimestep::steps_per_second(5.0))
                 .with_system(load_chunks)
                 .with_system(unload_chunks)
         )

@@ -1,9 +1,9 @@
 use std::sync::{Arc, Mutex};
 
 use bevy::{
-    math::DVec3,
+    math::{DVec3, Vec3A},
     prelude::*,
-    render::mesh::Indices
+    render::{mesh::Indices, primitives::{Frustum, Aabb}, camera::CameraProjection}
 };
 use itertools::Itertools;
 use noise::NoiseFn;
@@ -49,7 +49,7 @@ pub fn generate_terrain(
                 let height = height as usize;
 
                 for y in 0..CHUNK_SIZE {
-                    let y_real = y as usize + chunk.key.y as usize * CHUNK_SIZE;
+                    let y_real = y + chunk.key.y as usize * CHUNK_SIZE;
                     data.data[z][y][x] = if y_real > height {
                             Block::Air
                         } else if y_real == height {
@@ -58,7 +58,7 @@ pub fn generate_terrain(
                             Block::Dirt
                         } else {
                             Block::Stone
-                        }
+                        };
                 }
             }
 
@@ -212,4 +212,28 @@ pub fn generate_mesh(
 
         // if Instant::now() - start > Duration::from_millis(5) { break }
     });
+}
+
+/// Do fast frustum culling on chunks based on their position
+pub fn cull_meshes(mut chunks: Query<(&Chunk, &mut Visibility)>, camera: Query<(&Transform, &Projection), With<Camera>>) {
+    let (transform, projection) = camera.single();
+
+    let view_projection = projection.get_projection_matrix() * transform.compute_matrix().inverse();
+    let frustum = Frustum::from_view_projection(
+        &view_projection,
+        &transform.translation,
+        &transform.back(),
+        projection.far()
+    );
+
+    // let mut a = false;
+
+    for (chunk, mut visible) in &mut chunks {
+        let chunk_size = CHUNK_SIZE as f32;
+        let aabb = Aabb::from_min_max(Vec3::ZERO, Vec3::splat(chunk_size));
+        let position = chunk.key.as_vec3() * chunk_size;
+
+        visible.is_visible = frustum.intersects_obb(&aabb, &Mat4::from_translation(position), false)
+
+    }
 }

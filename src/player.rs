@@ -123,12 +123,11 @@ pub fn move_camera(
     camera.translation += velocity.0 * mask.0 * time.delta_seconds();
     bounding.center = camera.translation - Vec3::new(0.0, 0.6, 0.0);
 
-    velocity.0 *= 0.95;
-
-    let mut acceleration = Vec3::ZERO;
-
-    const SPEED: f32 = 0.5;
+    const ACCELERATION: f32 = 0.8;
+    const SPEED: f32 = 8.0;
     const GRAVITY: f32 = 0.5;
+    const TERMINAL_VELOCITY: f32 = 10.0;
+
 
     let mut relative_offset = Vec3::ZERO;
 
@@ -149,13 +148,17 @@ pub fn move_camera(
     relative_offset.y = 0.0;
     relative_offset = relative_offset.normalize_or_zero();
 
-    acceleration += relative_offset * SPEED;
-    acceleration += Vec3::NEG_Y * GRAVITY;
+    let y = velocity.0.y;
 
-    velocity.0 += acceleration/* *time.delta_seconds() */;
+    velocity.0 = relative_offset * SPEED;
+    // acceleration += Vec3::NEG_Y * GRAVITY;
+    velocity.0.y = y - GRAVITY;
+    velocity.0.y = velocity.0.y.max(-TERMINAL_VELOCITY);
+
+    // velocity.0 += acceleration/* *time.delta_seconds() */;
 
     if keyboard.just_pressed(KeyCode::Space) {
-        velocity.0.y = 40.0;
+        velocity.0.y = 10.0;
     }
 }
 

@@ -1,6 +1,6 @@
 use std::time::{Instant, Duration};
 
-use bevy::{prelude::*, utils::HashMap};
+use bevy::{prelude::*, utils::HashMap, render::view::NoFrustumCulling};
 use itertools::Itertools;
 
 use crate::{chunk::{NeedsMesh, NeedsTerrain, Chunk}, AtlasImage, block::Block};
@@ -155,8 +155,8 @@ impl ChunkData {
 }
 
 // Specified at half size
-const RENDER_DISTANCE: i32 = 8;
-const LOD_RANGE: i32 = 3;
+const RENDER_DISTANCE: i32 = 16;
+const LOD_RANGE: i32 = 4;
 pub fn load_chunks(
     mut commands: Commands,
     mut manager: ResMut<ChunkManager>,
@@ -209,6 +209,7 @@ pub fn load_chunks(
                         transform: Transform::from_translation(key.as_vec3() * CHUNK_SIZE as f32),
                         ..default()
                     },
+                    NoFrustumCulling,
                     Name::new(format!("{key}"))
                 ));
 
